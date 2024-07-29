@@ -3,5 +3,5 @@ export interface DeleteCacheStore {
 }
 
 export interface InsertCacheStore {
-  insert(key: string): Promise<void>;
+  insert(key: string, purchases: any): Promise<void>;
 }
