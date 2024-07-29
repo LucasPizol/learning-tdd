@@ -1,6 +1,7 @@
 import { DeleteCacheStore, InsertCacheStore } from "@/data/protocols/cache";
+import { mockPurchases } from "@/data/tests";
 import { LocalSavePurchases } from "@/data/usecases";
-import { SavePurchases } from "@/domain";
+import { SavePurchases } from "@/domain/usecases";
 
 class CacheStoreSpy implements DeleteCacheStore, InsertCacheStore {
   deleteCallsCount = 0;
@@ -19,6 +20,20 @@ class CacheStoreSpy implements DeleteCacheStore, InsertCacheStore {
     this.insertKey = key;
     this.insertValues = value as Array<SavePurchases.Params>;
   }
+
+  async simulateDeleteError(): Promise<void> {
+    jest.spyOn(CacheStoreSpy.prototype, "delete").mockImplementationOnce(() => {
+      this.deleteCallsCount++;
+      throw new Error();
+    });
+  }
+
+  async simulateInsertError(): Promise<void> {
+    jest.spyOn(CacheStoreSpy.prototype, "insert").mockImplementationOnce(() => {
+      this.insertCallsCount++;
+      throw new Error();
+    });
+  }
 }
 
 type SutTypes = {
@@ -34,19 +49,6 @@ const makeSut = (): SutTypes => {
     cacheStore,
   };
 };
-
-const mockPurchases = (): Array<SavePurchases.Params> => [
-  {
-    id: "1",
-    date: new Date(),
-    value: 50,
-  },
-  {
-    id: "2",
-    date: new Date(),
-    value: 70,
-  },
-];
 
 describe("LocalSavePurchases", () => {
   const purchases = mockPurchases();
@@ -66,9 +68,8 @@ describe("LocalSavePurchases", () => {
 
   test("Should not insert new cache if delete fails", () => {
     const { cacheStore, sut } = makeSut();
-    jest.spyOn(cacheStore, "delete").mockImplementationOnce(() => {
-      throw new Error();
-    });
+    cacheStore.simulateDeleteError();
+
     const promise = sut.save(purchases);
     expect(cacheStore.insertCallsCount).toBe(0);
     expect(promise).rejects.toThrow();
@@ -81,5 +82,14 @@ describe("LocalSavePurchases", () => {
     expect(cacheStore.deleteCallsCount).toBe(1);
     expect(cacheStore.insertKey).toBe("purchases");
     expect(cacheStore.insertValues).toEqual(purchases);
+  });
+
+  test("Should throw cache if insert fails", async () => {
+    const { cacheStore, sut } = makeSut();
+    await cacheStore.simulateInsertError();
+    const promise = sut.save(purchases);
+    expect(cacheStore.insertCallsCount).toBe(0);
+    expect(cacheStore.deleteCallsCount).toBe(1);
+    expect(promise).rejects.toThrow();
   });
 });
