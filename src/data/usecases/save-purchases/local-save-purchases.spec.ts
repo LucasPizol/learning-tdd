@@ -1,13 +1,20 @@
-import { CacheStore } from "@/data/protocols/cache";
+import { DeleteCacheStore, InsertCacheStore } from "@/data/protocols/cache";
 import { LocalSavePurchases } from "@/data/usecases";
 
-class CacheStoreSpy implements CacheStore {
+class CacheStoreSpy implements DeleteCacheStore, InsertCacheStore {
   deleteCallsCount = 0;
-  key: string;
+  insertCallsCount = 0;
+  deleteKey: string;
+  insertKey: string;
 
   async delete(key: string): Promise<void> {
     this.deleteCallsCount++;
-    this.key = key;
+    this.deleteKey = key;
+  }
+
+  async insert(key: string): Promise<void> {
+    this.insertCallsCount++;
+    this.insertKey = key;
   }
 }
 
@@ -36,6 +43,24 @@ describe("LocalSavePurchases", () => {
     const { cacheStore, sut } = makeSut();
     await sut.save();
     expect(cacheStore.deleteCallsCount).toBe(1);
-    expect(cacheStore.key).toBe("purchases");
+    expect(cacheStore.deleteKey).toBe("purchases");
+  });
+
+  test("Should not insert new cache if delete fails", () => {
+    const { cacheStore, sut } = makeSut();
+    jest.spyOn(cacheStore, "delete").mockImplementationOnce(() => {
+      throw new Error();
+    });
+    const promise = sut.save();
+    expect(cacheStore.insertCallsCount).toBe(0);
+    expect(promise).rejects.toThrow();
+  });
+
+  test("Should insert new cache if delete succeds", async () => {
+    const { cacheStore, sut } = makeSut();
+    await sut.save();
+    expect(cacheStore.insertCallsCount).toBe(1);
+    expect(cacheStore.deleteCallsCount).toBe(1);
+    expect(cacheStore.insertKey).toBe("purchases");
   });
 });
